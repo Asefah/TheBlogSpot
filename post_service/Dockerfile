@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-WORKDIR /33646991_CapstoneProject
+WORKDIR /TheBlogSpot
 
 RUN apt-get update && apt-get install -y curl
 
