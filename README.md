@@ -60,7 +60,7 @@
     - After setting up the the system (using docker-compose up), run the health endpoints in another terminal to test if the correct response is returned.
 
 ## - Project Structure
-    Milestone1/
+    TheBlogSpot/
     ├── README.md
     ├── CODE_PROVENANCE.md
     ├── architecture-diagram.png
