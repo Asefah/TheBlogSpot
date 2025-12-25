@@ -69,4 +69,3 @@ def test_protected_route_with_auth():
 
     assert res.status_code in (200, 201)
 
-
