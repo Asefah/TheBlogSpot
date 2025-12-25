@@ -63,10 +63,9 @@ def test_protected_route_with_auth():
 
     res = httpx.post(
         f"{GATEWAY_URL}/posts",
-        json={"title": "hello", "content": "I am here"},
+        json={"title": "hello", "content": "world"},
         headers={"Authorization": f"Bearer {token}"}
     )
 
     assert res.status_code in (200, 201)
-
 
