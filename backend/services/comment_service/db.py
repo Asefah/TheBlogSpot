@@ -30,6 +30,18 @@ class CommentCreateDB(SQLModel, table=True):
     dislikes: int = Field(sa_column=Column(Integer, nullable=False, default=0, server_default="0"))
     edited_at: str = Field(sa_column=Column(TIMESTAMP, server_default=func.now(), nullable=False))
     
+    
+class CommentPostReaction(SQLModel, table=True):
+    
+    __tablename__ = "comment_reactions"
+    
+    reaction_id: str = Field(sa_column=Column(String, primary_key=True, unique=True))
+    user_id: str = Field(sa_column=Column(String, nullable=False))
+    post_id: str = Field(sa_column=Column(String, nullable=False))
+    comment_id: str = Field(sa_column=Column(String, nullable=False))
+    reaction_type: int = Field(sa_column=Column(Integer, nullable=False))
+    created_at: str = Field(sa_column=Column(TIMESTAMP, server_default=func.now(), nullable=False))
+
 
 def init_db():
     SQLModel.metadata.create_all(engine)
@@ -123,11 +135,46 @@ def add_like(session: Session, comment_id: str) -> CommentResponse:
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found!")
     
-    setattr(comment, "likes", comment.likes + 1)
+    comment_reaction = session.exec(select(CommentPostReaction).where(CommentPostReaction.comment_id == comment_id 
+                                            and CommentPostReaction.user_id == comment.user_id)).first()
     
-    session.add(comment)
-    session.commit()
-    session.refresh(comment)
+    if not comment_reaction:
+        new_reaction = CommentPostReaction(
+            reaction_id=str(uuid.uuid4()),
+            user_id=comment.user_id,
+            post_id=comment.post_id,
+            comment_id=comment_id,
+            reaction_type=1,
+            created_at=str(datetime.now().isoformat())
+        )
+        
+        session.add(new_reaction)
+        session.commit()
+        session.refresh(new_reaction)
+    
+        setattr(comment, "likes", comment.likes + 1)
+    
+        session.add(comment)
+        session.commit()
+        session.refresh(comment)
+        
+    else:
+        if comment_reaction.reaction_type == 1:
+            HTTPException(status_code=400, detail="User has already liked the comment!")
+        else:
+            setattr(comment, "likes", comment.likes + 1)
+            setattr(comment, "dislikes", comment.dislikes - 1)
+            
+            session.add(comment)
+            session.commit()
+            session.refresh(comment)
+            
+            comment_reaction.reaction_type = 1
+            comment_reaction.created_at = str(datetime.now().isoformat())
+            
+            session.add(comment_reaction)
+            session.commit()
+            session.refresh(comment_reaction)
     
     return comment
 
@@ -138,11 +185,46 @@ def add_dislike(session: Session, comment_id: str) -> CommentResponse:
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found!")
     
-    setattr(comment, "dislikes", comment.dislikes + 1)
+    comment_reaction = session.exec(select(CommentPostReaction).where(CommentPostReaction.comment_id == comment_id 
+                                            and CommentPostReaction.user_id == comment.user_id)).first()
     
-    session.add(comment)
-    session.commit()
-    session.refresh(comment)
+    if not comment_reaction:
+        new_reaction = CommentPostReaction(
+            reaction_id=str(uuid.uuid4()),
+            user_id=comment.user_id,
+            post_id=comment.post_id,
+            comment_id=comment_id,
+            reaction_type=-1,
+            created_at=str(datetime.now().isoformat())
+        )
+        
+        session.add(new_reaction)
+        session.commit()
+        session.refresh(new_reaction)
+    
+        setattr(comment, "dislikes", comment.dislikes + 1)
+    
+        session.add(comment)
+        session.commit()
+        session.refresh(comment)
+    else:
+        if comment_reaction.reaction_type == -1:
+            raise HTTPException(status_code=400, detail="User has already disliked the comment!")
+        else:
+            setattr(comment, "dislikes", comment.dislikes + 1)
+            setattr(comment, "likes", comment.likes - 1)
+            
+            session.add(comment)
+            session.commit()
+            session.refresh(comment)
+            
+            comment_reaction.reaction_type = -1
+            comment_reaction.created_at = str(datetime.now().isoformat())
+            
+            session.add(comment_reaction)
+            session.commit()
+            session.refresh(comment_reaction)    
+
     
     return comment
 

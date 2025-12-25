@@ -2,12 +2,19 @@ from fastapi import FastAPI, HTTPException
 from models import CommentCreate, CommentResponse, CommentEdit
 import httpx
 import os
+import redis
 import logging
 from contextlib import asynccontextmanager, contextmanager
 from sqlmodel import Session
 from db import init_db, close_db_connection, engine, create_new_comment, retrieve_comment, retrieve_user_comments, retrieve_post_comments, edit_comment_info, add_like, add_dislike
 
 USER_SERVICE_BASE = os.getenv("USER_SERVICE_BASE", "http://user-service:8000")
+
+redis_client = redis.Redis(
+    host="redis", 
+    port=6379, 
+    decode_responses=True
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -70,6 +77,7 @@ async def health_check():
             "status": "starting",
             "details": f"User Service not reachable: {str(e)}"
         }
+      
        
     
 @app.post("/comments", status_code=201, response_model=CommentResponse)
@@ -183,21 +191,55 @@ async def delete_comment(comment_id: str, user_id: str):
 @app.put("/comments/{comment_id}/like", status_code=200)
 async def like_comment(comment_id: str):
     
-    with get_session() as session:
-        liked_comment = add_like(session, comment_id)
-        
-        #logging
-        logger.info(f"Comment {comment_id} liked!")
-        return liked_comment
+    comment = get_comment(comment_id)
+
+    reaction_key = f"comment:{comment_id}:reactions:{comment.user_id}"
+    cached_reaction = redis_client.get(reaction_key)
+    
+    if cached_reaction == 1:
+        logger.warning(f"User {comment.user_id} already liked comment {comment_id}")
+        raise HTTPException(status_code=403, detail="User has already liked the comment!")
+    else:
+        with get_session() as session:
+            liked_comment = add_like(session, comment_id)
+            
+            #logging
+            logger.info(f"Comment {comment_id} liked!")
+            
+            #caching
+            pipe = redis_client.pipeline()
+            pipe.set(reaction_key, 1, ex=3600)
+            pipe.incr(f"comment:{comment_id}:likes")
+            pipe.decr(f"comment:{comment_id}:dislikes")
+            pipe.execute()
+            
+            return liked_comment
 
 
 
 @app.put("/comments/{comment_id}/dislike", status_code=200)
 async def dislike_comment(comment_id: str):
     
-    with get_session() as session:
-        disliked_comment = add_dislike(session, comment_id)
-        
-        #logging
-        logger.info(f"Comment {comment_id} disliked!")
-        return disliked_comment
+    comment = get_comment(comment_id)
+    reaction_key = f"comment:{comment_id}:reactions:{comment.user_id}"
+    cached_reaction = redis_client.get(reaction_key)
+    
+    if cached_reaction == -1:
+        logger.warning(f"User {comment.user_id} already disliked comment {comment_id}")
+        raise HTTPException(status_code=403, detail="User has already disliked the comment!")
+    
+    else:
+    
+        with get_session() as session:
+            disliked_comment = add_dislike(session, comment_id)
+            
+            #caching
+            pipe = redis_client.pipeline()
+            pipe.set(reaction_key, -1, ex=3600)
+            pipe.incr(f"comment:{comment_id}:dislikes")
+            pipe.decr(f"comment:{comment_id}:likes")
+            pipe.execute()
+            
+            #logging
+            logger.info(f"Comment {comment_id} disliked!")
+            return disliked_comment

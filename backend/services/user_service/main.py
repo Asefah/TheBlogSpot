@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from datetime import datetime
-from models import UserCreate, UserCreateResponse, UserUpdate
-from db import init_db, close_db_connection, engine, create_user, edit_user_info, get_user_info, add_followers, remove_followers
+from models import UserCreate, UserCreateResponse, UserUpdate, UserLogin
+from security import verify_password, get_password_hash
+from db import init_db, close_db_connection, engine, create_user, edit_user_info, get_user_info, get_user_by_username, add_followers, remove_followers
 from contextlib import asynccontextmanager, contextmanager
 from sqlmodel import Session
 import logging
@@ -66,7 +67,24 @@ async def health_check():
         "status": "healthy",
     }
 
+
+@app.post("/auth/verify")
+def verify_user_credentials(credentials: UserLogin):
     
+    with get_session() as session:
+        user = get_user_by_username(session, username=credentials.username)
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        if not verify_password(credentials.password, user.hashed_password):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        return {
+            "user_id": str(user.user_id),
+            "username": user.username,
+            "active": user.active
+        }
 
 @app.post("/users", status_code=201, response_model=UserCreateResponse)
 def create_new_user(user: UserCreate):

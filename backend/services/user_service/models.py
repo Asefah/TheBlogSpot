@@ -11,6 +11,11 @@ class UserCreate(BaseModel):
     full_name: Optional[str] = Field(default=None, max_length=100)
 
 
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
 class UserCreateResponse(BaseModel):
     user_id: str
     username: str
