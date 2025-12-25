@@ -8,8 +8,8 @@ ALGORITHM = "HS256"
 def test_login_success():
     
     payload = {
-        "username": "bigbootyama",
-        "password": "smalltitssmallerheart"
+        "username": "ama_wuz_here",
+        "password": "peterpan123"
     }
     
     res = httpx.post(
@@ -37,7 +37,7 @@ def test_login_success():
 def test_login_invalid_password():
     res = httpx.post(
         f"{GATEWAY_URL}/auth/login",
-        json={"username": "bigbootyama", "password": "wrong"},
+        json={"username": "ama_wuz_here", "password": "wrong"},
         timeout=5.0
     )
 
@@ -56,7 +56,7 @@ def test_protected_route_requires_auth():
 def test_protected_route_with_auth():
     login = httpx.post(
         f"{GATEWAY_URL}/auth/login",
-        json={"username": "bigbootyama", "password": "smalltitssmallerheart"}
+        json={"username": "ama_wuz_here", "password": "peterpan123"}
     )
 
     token = login.json()["access_token"]
