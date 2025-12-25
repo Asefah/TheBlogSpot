@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import EmailStr
 from models import UserCreate, UserCreateResponse, UserUpdate
 from datetime import datetime
+from security import get_password_hash
 import os
 from fastapi import HTTPException
 import uuid
@@ -23,6 +24,7 @@ class UserCreateDB(SQLModel, table=True):
     
     user_id: str = Field(sa_column=Column(String, primary_key=True, unique=True))
     username: str = Field(sa_column=Column(String(50), nullable=False))
+    hashed_password: str = Field(sa_column=Column(String(255), nullable=False))
     email: str = Field(sa_column=Column(String(255), unique=True, nullable=False))
     full_name: str = Field(sa_column=Column(String(255), nullable=True))
     created_at: str = Field(sa_column=Column(TIMESTAMP, server_default=func.now(), nullable=False))
@@ -46,7 +48,9 @@ def close_db_connection():
 def create_user(session: Session, user: UserCreate) -> UserCreateResponse:
     created = str(datetime.now().isoformat())
     user_id = str(uuid.uuid1())
-    user = UserCreateDB(user_id=user_id, username=user.username, email=user.email, full_name=user.full_name, created_at=created)
+    password_hash = get_password_hash(user.password)
+    
+    user = UserCreateDB(user_id=user_id, username=user.username, hashed_password=password_hash, email=user.email, full_name=user.full_name, created_at=created)
     
     session.add(user)
     session.commit()
@@ -75,7 +79,17 @@ def get_user_info(session: Session, user_id: str) -> UserCreateResponse:
     else: 
         return user
     
+
+def get_user_by_username(session: Session, username: str) -> UserCreateResponse:
+    query = select(UserCreateDB).where(UserCreateDB.username == username)
+    result = session.exec(query).first()
     
+    if (not result):
+        raise HTTPException(status_code=404, detail=f"User with username {username} does not exists!")
+    else:
+        return result  
+
+ 
 def edit_user_info(session: Session, original_user: UserCreateResponse, update: UserUpdate) -> UserCreateResponse:
     updated_info = update.model_dump(exclude_unset=True)
     

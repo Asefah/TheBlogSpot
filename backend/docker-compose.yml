@@ -1,5 +1,20 @@
 services:
     
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    networks:
+      - blogspot-network
+    depends_on:
+      - user_service
+      - post_service
+      - comment_service
+      - trending_service
+    restart: unless-stopped
+
   nginx:
     image: nginx:latest
     ports:
@@ -13,6 +28,24 @@ services:
       - post_service
       - comment_service
       - trending_service
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - blogspot-network
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   user_db:
@@ -37,7 +70,7 @@ services:
 
   user_service:
     build:
-      context: ./user_service
+      context: ./services/user_service
       dockerfile: Dockerfile
     container_name: user_service
     ports:
@@ -45,6 +78,8 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg2://blogspotuser-table:blogspotuserpass@user_db:5432/blogspotuser
     depends_on:
+      redis:
+        condition: service_healthy
       user_db:
         condition: service_healthy
     networks:
@@ -81,7 +116,7 @@ services:
 
   post_service:
     build:
-      context: ./post_service
+      context: ./services/post_service
       dockerfile: Dockerfile
     container_name: post_service
     ports:
@@ -94,6 +129,8 @@ services:
       post_db:
         condition: service_healthy
       user_service:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - blogspot-network
@@ -128,7 +165,7 @@ services:
 
   comment_service:
     build:
-      context: ./comment_service
+      context: ./services/comment_service
       dockerfile: Dockerfile
     ports:
       - "8002:8000"
@@ -139,6 +176,8 @@ services:
       comments_db:
         condition: service_healthy
       user_service:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - blogspot-network
@@ -152,7 +191,7 @@ services:
 
   trending_service:
     build:
-      context: ./trending_service
+      context: ./services/trending_service
       dockerfile: Dockerfile
     ports:
       - "8003:8000"
@@ -170,6 +209,8 @@ services:
         condition: service_healthy
       comment_service:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - blogspot-network
     restart: unless-stopped
@@ -184,6 +225,7 @@ volumes:
   user_data:
   post_data:
   comments_data:
+  redis_data:
 
 networks:
   blogspot-network:
