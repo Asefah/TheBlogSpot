@@ -38,18 +38,20 @@ def test_signup_login_and_auth_flow():
         json=login_payload,
         timeout=5.0
     )
-    
+
     assert login_response.status_code == 200
-    
+    assert login_response.json()["token_type"] == "bearer"
+    assert login_response.cookies.get("refresh_token") == "fake-refresh-token"
+
     token = login_response.json()["access_token"]
     assert token is not None
-    
+
     decoded = jwt.decode(
         token,
         SECRET_KEY,
         algorithms=[ALGORITHM]
     )
-    
+
     assert decoded["sub"] == user_id
     
     
